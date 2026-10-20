@@ -2,6 +2,10 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## Language support
+
+The app supports Vietnamese and English. Use the language button on the dish list to switch languages; your preference is saved on the device.
+
 ## Get started
 
 1. Install dependencies

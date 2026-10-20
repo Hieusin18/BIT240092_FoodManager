@@ -1,16 +1,19 @@
 
 import { Image, StyleSheet, Text, View } from "react-native";
 import type { Dish } from "../models/Dish";
+import { translate, type Locale } from "../locales/translations";
 
 type Props = {
     dish: Dish;
     categoryName: string;
+    locale: Locale;
     onPress?: () => void;
 };
 
 export default function DishCard({
     dish,
     categoryName,
+    locale,
     onPress,
 }: Props) {
     const thumbnail = dish.BIT240092_DishImage.find(
@@ -30,7 +33,7 @@ export default function DishCard({
                 />
             ) : (
                 <View style={[styles.image, styles.placeholder]}>
-                    <Text>Chưa có ảnh</Text>
+                    <Text>{translate(locale, "noImage")}</Text>
                 </View>
             )}
 
@@ -48,13 +51,16 @@ export default function DishCard({
                 </Text>
 
                 <Text>
-                    Thời gian chế biến: {dish.BIT240092_PreparationTime} phút
+                    {translate(locale, "preparationTime")}{" "}
+                    {dish.BIT240092_PreparationTime}{" "}
+                    {translate(locale, "minutes")}
                 </Text>
 
 
                 {/* Hiển thị loại món ăn */}
                 <Text style={styles.dishType}>
-                    Loại món: {dishType}
+                    {translate(locale, "dishTypeCardPrefix")}{" "}
+                    {translate(locale, dishType === "Quick" ? "quick" : "regular")}
                 </Text>
 
                 <Text
@@ -63,8 +69,8 @@ export default function DishCard({
                     }}
                 >
                     {dish.BIT240092_IsAvailable
-                        ? "Đang phục vụ"
-                        : "Ngừng phục vụ"}
+                        ? translate(locale, "serving")
+                        : translate(locale, "notServing")}
                 </Text>
             </View>
         </View>

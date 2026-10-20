@@ -34,6 +34,14 @@ import {
 import { syncPendingOperations } from "../services/sync";
 import DishCard from "../components/DishCard";
 import DishForm from "../components/DishForm";
+import {
+  getSavedLocale,
+  saveLocale,
+  translate,
+  translateCategoryName,
+  type Locale,
+  type TranslationKey,
+} from "../locales/translations";
 
 type DishTypeFilter = "all" | "Quick" | "Regular";
 
@@ -74,14 +82,46 @@ export default function HomeScreen() {
 
   // Trạng thái giao diện
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<TranslationKey | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [editingDish, setEditingDish] = useState<Dish | undefined>();
+  const [locale, setLocale] = useState<Locale>("vi");
+  const [languageReady, setLanguageReady] = useState(false);
+  const t = (
+    key: TranslationKey,
+    values?: Record<string, string | number>,
+  ) => translate(locale, key, values);
+
+  useEffect(() => {
+    let active = true;
+
+    void getSavedLocale()
+      .then((savedLocale) => {
+        if (active && savedLocale) {
+          setLocale(savedLocale);
+        }
+      })
+      .catch((error) => {
+        console.error("Lỗi tải tùy chọn ngôn ngữ:", error);
+        if (active) {
+          setMessage("languageLoadError");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLanguageReady(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Tải dữ liệu cục bộ trước, sau đó đồng bộ máy chủ
   const loadData = useCallback(async () => {
     setLoading(true);
-    setMessage("");
+    setMessage(null);
 
     try {
       const localDishes = await getDishes();
@@ -105,13 +145,11 @@ export default function HomeScreen() {
         setCategories(remoteCategories);
       } catch (error) {
         console.warn("Không tải được dữ liệu từ máy chủ:", error);
-        setMessage(
-          "Không có kết nối máy chủ. Đang dùng dữ liệu trên thiết bị.",
-        );
+        setMessage("localDataWarning");
       }
     } catch (error) {
       console.error("Lỗi đọc dữ liệu:", error);
-      setMessage("Không thể đọc dữ liệu cục bộ.");
+      setMessage("localDataError");
     } finally {
       setLoading(false);
     }
@@ -122,10 +160,27 @@ export default function HomeScreen() {
   }, [loadData]);
 
   // Lấy tên danh mục
-  const getCategoryName = (categoryId: string) =>
-    categories.find(
+  const getCategoryName = (categoryId: string) => {
+    const name = categories.find(
       (category) => category.BIT240092_Id === categoryId,
-    )?.BIT240092_Name ?? "Chưa phân loại";
+    )?.BIT240092_Name;
+
+    return name
+      ? translateCategoryName(locale, name)
+      : t("unclassified");
+  };
+
+  async function handleLanguageToggle() {
+    const nextLocale: Locale = locale === "vi" ? "en" : "vi";
+
+    try {
+      await saveLocale(nextLocale);
+      setLocale(nextLocale);
+    } catch (error) {
+      console.error("Lỗi lưu tùy chọn ngôn ngữ:", error);
+      Alert.alert(t("errorTitle"), t("languageSaveError"));
+    }
+  }
 
   // Tìm kiếm + lọc nhiều điều kiện + sắp xếp
   const filteredDishes = dishes
@@ -276,15 +331,15 @@ export default function HomeScreen() {
       }
 
       Alert.alert(
-        "Đã lưu",
-        "Món ăn đã được lưu trên thiết bị. Nếu chưa có mạng, dữ liệu sẽ chờ đồng bộ.",
+        t("savedTitle"),
+        t("savedMessage"),
       );
     } catch (error) {
       console.error("Lỗi lưu món ăn:", error);
 
       Alert.alert(
-        "Lỗi",
-        "Không thể lưu món ăn. Hãy kiểm tra Console trong VS Code.",
+        t("errorTitle"),
+        t("saveDishError"),
       );
     }
   }
@@ -292,15 +347,15 @@ export default function HomeScreen() {
   // Xóa món ăn
   function handleDeleteDish(dish: Dish) {
     Alert.alert(
-      "Xác nhận xóa",
-      `Bạn có chắc muốn xóa món "${dish.BIT240092_Name}" không?`,
+      t("confirmDeleteTitle"),
+      t("confirmDeleteMessage", { name: dish.BIT240092_Name }),
       [
         {
-          text: "Hủy",
+          text: t("cancel"),
           style: "cancel",
         },
         {
-          text: "Xóa",
+          text: t("delete"),
           style: "destructive",
           onPress: () => {
             void (async () => {
@@ -355,15 +410,15 @@ export default function HomeScreen() {
                 }
 
                 Alert.alert(
-                  "Đã xóa",
-                  "Món ăn đã được xóa khỏi danh sách trên thiết bị.",
+                  t("deletedTitle"),
+                  t("deletedMessage"),
                 );
               } catch (error) {
                 console.error("Lỗi khi xóa món ăn:", error);
 
                 Alert.alert(
-                  "Lỗi",
-                  "Không thể xóa món ăn. Hãy kiểm tra Console trong VS Code.",
+                  t("errorTitle"),
+                  t("deleteDishError"),
                 );
               }
             })();
@@ -377,18 +432,33 @@ export default function HomeScreen() {
   function renderFilters() {
     return (
       <View>
-        <Text style={styles.title}>Quản lý món ăn</Text>
+        <Text style={styles.title}>{t("appTitle")}</Text>
 
         {/* Tìm kiếm */}
-        <TextInput
-          style={styles.search}
-          placeholder="Tìm kiếm theo tên món..."
-          value={search}
-          onChangeText={setSearch}
-        />
+        <View style={styles.searchRow}>
+          <TextInput
+            style={[styles.search, styles.searchInput]}
+            placeholder={t("searchPlaceholder")}
+            value={search}
+            onChangeText={setSearch}
+          />
+          <Pressable
+            style={styles.languageButton}
+            onPress={() => void handleLanguageToggle()}
+            disabled={!languageReady}
+            accessibilityRole="button"
+            accessibilityLabel={t(
+              locale === "vi" ? "switchToEnglish" : "switchToVietnamese",
+            )}
+          >
+            <Text style={styles.languageButtonText}>
+              {t(locale === "vi" ? "switchToEnglish" : "switchToVietnamese")}
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Lọc loại món */}
-        <Text style={styles.filterTitle}>Loại món ăn</Text>
+        <Text style={styles.filterTitle}>{t("dishType")}</Text>
 
         <View style={styles.filterRow}>
           {(["all", "Quick", "Regular"] as const).map((type) => (
@@ -408,14 +478,18 @@ export default function HomeScreen() {
                   styles.filterButtonTextActive,
                 ]}
               >
-                {type === "all" ? "Tất cả" : type}
+                {type === "all"
+                  ? t("all")
+                  : type === "Quick"
+                    ? t("quick")
+                    : t("regular")}
               </Text>
             </Pressable>
           ))}
         </View>
 
         {/* Lọc danh mục */}
-        <Text style={styles.filterTitle}>Danh mục món ăn</Text>
+        <Text style={styles.filterTitle}>{t("categories")}</Text>
 
         <View style={styles.filterRow}>
           <Pressable
@@ -433,7 +507,7 @@ export default function HomeScreen() {
                 styles.filterButtonTextActive,
               ]}
             >
-              Tất cả
+              {t("all")}
             </Text>
           </Pressable>
 
@@ -456,21 +530,21 @@ export default function HomeScreen() {
                   styles.filterButtonTextActive,
                 ]}
               >
-                {category.BIT240092_Name}
+                {translateCategoryName(locale, category.BIT240092_Name)}
               </Text>
             </Pressable>
           ))}
         </View>
 
         {/* Lọc trạng thái */}
-        <Text style={styles.filterTitle}>Trạng thái bán</Text>
+        <Text style={styles.filterTitle}>{t("salesStatus")}</Text>
 
         <View style={styles.filterRow}>
           {(
             [
-              ["all", "Tất cả"],
-              ["available", "Đang bán"],
-              ["unavailable", "Ngừng bán"],
+              ["all", t("all")],
+              ["available", t("available")],
+              ["unavailable", t("unavailable")],
             ] as const
           ).map(([value, label]) => (
             <Pressable
@@ -496,12 +570,12 @@ export default function HomeScreen() {
         </View>
 
         {/* Lọc khoảng giá */}
-        <Text style={styles.filterTitle}>Khoảng giá (VNĐ)</Text>
+        <Text style={styles.filterTitle}>{t("priceRange")}</Text>
 
         <View style={styles.priceRow}>
           <TextInput
             style={styles.priceInput}
-            placeholder="Giá thấp nhất"
+            placeholder={t("minimumPrice")}
             value={minPrice}
             onChangeText={(value) =>
               setMinPrice(value.replace(/[^0-9]/g, ""))
@@ -509,11 +583,11 @@ export default function HomeScreen() {
             keyboardType="numeric"
           />
 
-          <Text style={styles.priceSeparator}>đến</Text>
+          <Text style={styles.priceSeparator}>{t("to")}</Text>
 
           <TextInput
             style={styles.priceInput}
-            placeholder="Giá cao nhất"
+            placeholder={t("maximumPrice")}
             value={maxPrice}
             onChangeText={(value) =>
               setMaxPrice(value.replace(/[^0-9]/g, ""))
@@ -523,15 +597,15 @@ export default function HomeScreen() {
         </View>
 
         {/* Sắp xếp */}
-        <Text style={styles.filterTitle}>Sắp xếp</Text>
+        <Text style={styles.filterTitle}>{t("sort")}</Text>
 
         <View style={styles.filterRow}>
           {(
             [
-              ["none", "Mặc định"],
-              ["priceAsc", "Giá tăng"],
-              ["priceDesc", "Giá giảm"],
-              ["timeAsc", "Thời gian tăng"],
+              ["none", t("defaultSort")],
+              ["priceAsc", t("priceAscending")],
+              ["priceDesc", t("priceDescending")],
+              ["timeAsc", t("timeAscending")],
             ] as const
           ).map(([value, label]) => (
             <Pressable
@@ -559,7 +633,10 @@ export default function HomeScreen() {
         {/* Xóa bộ lọc */}
         <View style={styles.toolbar}>
           <Text style={styles.count}>
-            Số món tìm thấy: {filteredDishes.length}/{dishes.length}
+            {t("foundDishes", {
+              found: filteredDishes.length,
+              total: dishes.length,
+            })}
           </Text>
 
           <Pressable
@@ -567,7 +644,7 @@ export default function HomeScreen() {
             onPress={resetFilters}
           >
             <Text style={styles.resetButtonText}>
-              Xóa bộ lọc
+              {t("resetFilters")}
             </Text>
           </Pressable>
         </View>
@@ -577,11 +654,11 @@ export default function HomeScreen() {
           style={styles.addButton}
           onPress={openAddForm}
         >
-          <Text style={styles.addButtonText}>+ Thêm món ăn</Text>
+          <Text style={styles.addButtonText}>{t("addDish")}</Text>
         </Pressable>
 
         {message ? (
-          <Text style={styles.message}>{message}</Text>
+          <Text style={styles.message}>{t(message)}</Text>
         ) : null}
       </View>
     );
@@ -593,7 +670,7 @@ export default function HomeScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" />
           <Text style={styles.loadingText}>
-            Đang tải dữ liệu món ăn...
+            {t("loadingDishes")}
           </Text>
         </View>
       ) : (
@@ -605,13 +682,14 @@ export default function HomeScreen() {
               <Pressable
                 onPress={() => openEditForm(item)}
                 accessibilityRole="button"
-                accessibilityLabel={`Chỉnh sửa ${item.BIT240092_Name}`}
+                accessibilityLabel={`${t("edit")} ${item.BIT240092_Name}`}
               >
                 <DishCard
                   dish={item}
                   categoryName={getCategoryName(
                     item.BIT240092_DishCategoryId,
                   )}
+                  locale={locale}
                 />
               </Pressable>
 
@@ -621,7 +699,7 @@ export default function HomeScreen() {
                   onPress={() => openEditForm(item)}
                 >
                   <Text style={styles.actionText}>
-                    Chỉnh sửa
+                    {t("edit")}
                   </Text>
                 </Pressable>
 
@@ -629,7 +707,7 @@ export default function HomeScreen() {
                   style={styles.deleteButton}
                   onPress={() => handleDeleteDish(item)}
                 >
-                  <Text style={styles.actionText}>Xóa</Text>
+                  <Text style={styles.actionText}>{t("delete")}</Text>
                 </Pressable>
               </View>
             </View>
@@ -637,7 +715,7 @@ export default function HomeScreen() {
           ListHeaderComponent={renderFilters}
           ListEmptyComponent={
             <Text style={styles.empty}>
-              Chưa có món ăn phù hợp với điều kiện tìm kiếm.
+              {t("noMatchingDishes")}
             </Text>
           }
           contentContainerStyle={styles.listContent}
@@ -657,6 +735,7 @@ export default function HomeScreen() {
           <DishForm
             categories={categories}
             initialDish={editingDish}
+            locale={locale}
             onSave={handleSaveDish}
             onCancel={() => {
               setFormVisible(false);
@@ -676,11 +755,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: {
+    flex: 1,
     fontSize: 24,
     fontWeight: "bold",
     marginTop: 16,
-    marginBottom: 16,
     color: "#222222",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  languageButton: {
+    minHeight: 48,
+    minWidth: 84,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#1976D2",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  languageButtonText: {
+    color: "#1976D2",
+    fontWeight: "600",
   },
   search: {
     backgroundColor: "#FFFFFF",
@@ -689,7 +790,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
   },
   filterTitle: {
     fontSize: 14,

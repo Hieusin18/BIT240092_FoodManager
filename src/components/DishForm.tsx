@@ -14,6 +14,12 @@ import {
 
 import type { Dish } from "../models/Dish";
 import type { DishCategory } from "../models/DishCategory";
+import {
+    translate,
+    translateCategoryName,
+    type Locale,
+    type TranslationKey,
+} from "../locales/translations";
 
 type DishImage = {
     BIT240092_ImageUrl: string;
@@ -23,6 +29,7 @@ type DishImage = {
 type Props = {
     categories: DishCategory[];
     initialDish?: Dish;
+    locale: Locale;
     onSave: (dish: Dish) => void | Promise<void>;
     onCancel: () => void;
 };
@@ -30,6 +37,7 @@ type Props = {
 export default function DishForm({
     categories,
     initialDish,
+    locale,
     onSave,
     onCancel,
 }: Props) {
@@ -42,6 +50,10 @@ export default function DishForm({
     const [imageUrls, setImageUrls] = useState<string[]>([""]);
     const [thumbnailIndex, setThumbnailIndex] = useState(0);
     const [saving, setSaving] = useState(false);
+    const t = (
+        key: TranslationKey,
+        values?: Record<string, string | number>,
+    ) => translate(locale, key, values);
 
     useEffect(() => {
         setName(initialDish?.BIT240092_Name ?? "");
@@ -93,7 +105,7 @@ export default function DishForm({
         const numericTime = Number(preparationTime);
 
         if (!trimmedName) {
-            Alert.alert("Dữ liệu chưa hợp lệ", "Vui lòng nhập tên món ăn.");
+            Alert.alert(t("invalidDataTitle"), t("enterDishName"));
             return;
         }
 
@@ -102,7 +114,7 @@ export default function DishForm({
             !Number.isFinite(numericPrice) ||
             numericPrice <= 0
         ) {
-            Alert.alert("Dữ liệu chưa hợp lệ", "Giá món ăn phải lớn hơn 0.");
+            Alert.alert(t("invalidDataTitle"), t("priceMustBePositive"));
             return;
         }
 
@@ -112,8 +124,8 @@ export default function DishForm({
             numericTime <= 0
         ) {
             Alert.alert(
-                "Dữ liệu chưa hợp lệ",
-                "Thời gian chế biến phải lớn hơn 0."
+                t("invalidDataTitle"),
+                t("timeMustBePositive")
             );
             return;
         }
@@ -124,7 +136,7 @@ export default function DishForm({
                 (category) => category.BIT240092_Id === categoryId
             )
         ) {
-            Alert.alert("Dữ liệu chưa hợp lệ", "Vui lòng chọn danh mục hợp lệ.");
+            Alert.alert(t("invalidDataTitle"), t("selectValidCategory"));
             return;
         }
 
@@ -138,8 +150,8 @@ export default function DishForm({
 
         if (invalidUrl) {
             Alert.alert(
-                "Dữ liệu chưa hợp lệ",
-                "Mỗi URL ảnh phải bắt đầu bằng http:// hoặc https://."
+                t("invalidDataTitle"),
+                t("invalidImageUrl")
             );
             return;
         }
@@ -172,10 +184,10 @@ export default function DishForm({
             await onSave(dish);
         } catch (error) {
             Alert.alert(
-                "Không thể lưu món ăn",
+                t("unableToSaveDish"),
                 error instanceof Error
                     ? error.message
-                    : "Đã xảy ra lỗi không xác định."
+                    : t("unknownError")
             );
         } finally {
             setSaving(false);
@@ -210,33 +222,33 @@ export default function DishForm({
             keyboardShouldPersistTaps="handled"
         >
             <Text style={styles.title}>
-                {initialDish ? "Chỉnh sửa món ăn" : "Thêm món ăn"}
+                {initialDish ? t("dishEditingTitle") : t("dishAddingTitle")}
             </Text>
 
-            <Text style={styles.label}>Tên món ăn *</Text>
+            <Text style={styles.label}>{t("dishNameLabel")}</Text>
             <TextInput
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="Ví dụ: Phở bò"
+                placeholder={t("nameExample")}
                 maxLength={100}
             />
 
-            <Text style={styles.label}>Giá tiền (VNĐ) *</Text>
+            <Text style={styles.label}>{t("priceLabel")}</Text>
             <TextInput
                 style={styles.input}
                 value={price}
                 onChangeText={setPrice}
-                placeholder="Ví dụ: 45000"
+                placeholder={t("priceExample")}
                 keyboardType="numeric"
             />
 
-            <Text style={styles.label}>Thời gian chế biến (phút) *</Text>
+            <Text style={styles.label}>{t("preparationTimeLabel")}</Text>
             <TextInput
                 style={styles.input}
                 value={preparationTime}
                 onChangeText={setPreparationTime}
-                placeholder="Ví dụ: 20"
+                placeholder={t("timeExample")}
                 keyboardType="numeric"
             />
 
@@ -244,14 +256,17 @@ export default function DishForm({
                 Number.isFinite(Number(preparationTime)) &&
                 Number(preparationTime) > 0 ? (
                 <Text style={styles.helpText}>
-                    Loại món ăn: {Number(preparationTime) <= 15 ? "Quick" : "Regular"}
+                    {t("dishTypePrefix")}{" "}
+                    {Number(preparationTime) <= 15
+                        ? t("quick")
+                        : t("regular")}
                 </Text>
             ) : null}
 
-            <Text style={styles.label}>Danh mục *</Text>
+            <Text style={styles.label}>{t("categoryLabel")}</Text>
             {categories.length === 0 ? (
                 <Text style={styles.warning}>
-                    Chưa có danh mục. Hãy tạo danh mục trên MockAPI trước.
+                    {t("noCategories")}
                 </Text>
             ) : (
                 <View style={styles.categoryList}>
@@ -261,7 +276,10 @@ export default function DishForm({
                         return (
                             <PressableCategory
                                 key={category.BIT240092_Id}
-                                label={category.BIT240092_Name}
+                                label={translateCategoryName(
+                                    locale,
+                                    category.BIT240092_Name,
+                                )}
                                 selected={selected}
                                 onPress={() => setCategoryId(category.BIT240092_Id)}
                             />
@@ -270,27 +288,27 @@ export default function DishForm({
                 </View>
             )}
 
-            <Text style={styles.label}>Mô tả</Text>
+            <Text style={styles.label}>{t("descriptionLabel")}</Text>
             <TextInput
                 style={[styles.input, styles.multiline]}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Mô tả món ăn..."
+                placeholder={t("descriptionPlaceholder")}
                 multiline
                 textAlignVertical="top"
             />
 
-            <Text style={styles.label}>Hình ảnh món ăn</Text>
+            <Text style={styles.label}>{t("dishImages")}</Text>
             <Text style={styles.helpText}>
-                Nhập URL ảnh. Chọn một ảnh làm ảnh đại diện cho món ăn.
+                {t("imageInstructions")}
             </Text>
 
             {imageUrls.map((url, index) => (
                 <View key={`image-${index}`} style={styles.imageItem}>
                     <Text style={styles.imageLabel}>
-                        Ảnh {index + 1}
+                        {t("imageNumber", { number: index + 1 })}
                         {url.trim() && index === thumbnailIndex
-                            ? " (Ảnh đại diện)"
+                            ? t("thumbnailSuffix")
                             : ""}
                     </Text>
 
@@ -316,8 +334,8 @@ export default function DishForm({
                             <Button
                                 title={
                                     index === thumbnailIndex
-                                        ? "Ảnh đại diện đã chọn"
-                                        : "Chọn làm ảnh đại diện"
+                                        ? t("thumbnailSelected")
+                                        : t("selectThumbnail")
                                 }
                                 disabled={index === thumbnailIndex || !url.trim()}
                                 onPress={() => setThumbnailIndex(index)}
@@ -326,7 +344,7 @@ export default function DishForm({
 
                         <View style={styles.imageActionButton}>
                             <Button
-                                title="Xóa ảnh"
+                                title={t("removeImage")}
                                 color="#D32F2F"
                                 onPress={() => removeImage(index)}
                             />
@@ -337,7 +355,7 @@ export default function DishForm({
 
             <View style={styles.addImageButton}>
                 <Button
-                    title="+ Thêm ảnh khác"
+                    title={t("addAnotherImage")}
                     onPress={() => {
                         setImageUrls((current) => [...current, ""]);
                         // Nếu đây là ảnh đầu tiên, nó sẽ được chọn làm ảnh đại diện.
@@ -347,14 +365,14 @@ export default function DishForm({
             </View>
 
             <View style={styles.switchRow}>
-                <Text style={styles.label}>Đang bán</Text>
+                <Text style={styles.label}>{t("selling")}</Text>
                 <Switch value={isAvailable} onValueChange={setIsAvailable} />
             </View>
 
             <View style={styles.buttons}>
                 <View style={styles.button}>
                     <Button
-                        title="Hủy"
+                        title={t("cancel")}
                         color="#777777"
                         onPress={onCancel}
                         disabled={saving}
@@ -362,14 +380,14 @@ export default function DishForm({
                 </View>
                 <View style={styles.button}>
                     <Button
-                        title={saving ? "Đang lưu..." : "Lưu món ăn"}
+                        title={saving ? t("saving") : t("saveDish")}
                         onPress={handleSave}
                         disabled={saving || categories.length === 0}
                     />
                 </View>
             </View>
 
-            <Text style={styles.note}>* Các trường có dấu sao là bắt buộc.</Text>
+            <Text style={styles.note}>{t("requiredFieldsNote")}</Text>
         </ScrollView>
     );
 }
